@@ -232,18 +232,3 @@ def _sBrMonomials(mon1,mon2):
 #---------------------------------------------------------------------
 # Other functions
 #---------------------------------------------------------------------
-
-# Poisson Bracket
-
-# Hamiltonian Vector Field
-
-# Poisson Algebra Class (?)
-
-# differential for Poisson (Co)-Homology  (may be useful -- use sympy
-# solve resulting equations.)
-
-# Contraction / inner product
-
-# Curl Operator! (easy!)
-
-# canonical examples (Volume Form, std Poisson str, sl2, etc...)
