@@ -54,7 +54,7 @@ class Mv(object):
             A = sBr(A, mvs.pop())
 
         return A._P[()]
-    
+
     def deg(self):
         '''decompose the multivector w/r/t the polynomial degree of the coefficients'''
         degdict = defaultdict(lambda: defaultdict(int))
