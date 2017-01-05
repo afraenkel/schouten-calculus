@@ -1,234 +1,234 @@
-"""
-Implements a class for multivector fields over the ring of sympy symbols.
-Includes wedge product, schouten bracket, etc...
-"""
+#!/usr/bin/env python
 
-from sympy import Symbol, diff
-
-
-#---------------------------------------------------------------------
-# Globals / setting coordinates
-#---------------------------------------------------------------------
-
-COORDS = list()
-
-def setCoordinates(dim,symb='x'):
-    """Sets the dimension and variable symbol (right now, only 'x' works). """
-    global COORDS
-    COORDS = [ Symbol('%s_%d' %(symb,k)) for k in range(dim) ]
-    pass
+import sympy
+from collections import defaultdict
+from copy import deepcopy
+from functools import reduce
+from operator import mul
 
 
-#---------------------------------------------------------------------
-# MultiVector Class definition
-#---------------------------------------------------------------------
+class Mv(object):
 
-class MultiVect(object):
-    """
-    Class of multivectors over a ring (any class with well defined +/*).
-    a MultiVect object is a list of monomial multivectors, accessed via self.monomials.
-    """
-    
-    def __init__(self, X=[] ):
-        # TODO: instatiate with single elt / single tuple...
-        mons = list()
-        for x in X:
-            if type(x) is not _MultiVectMonomial:
-                mons.append( _MultiVectMonomial(x) )
-            else:
-                mons.append( x )
-        if len(mons) == 0:
-            mons = [ _MultiVectMonomial(0) ]
-        self.monomials = mons
+    def __init__(self, gens, P=defaultdict(int)):
+        self.gens = gens
+        self._P = P
 
     def __str__(self):
-        s = ''
-        # sort the monomials by degree and print them separated by ' + '.
-        for monom in sorted(self.order().monomials, key=lambda x:x.degree() ):
-            if str(monom):
-                monomStr = "%s + " %str( monom )
-                s += monomStr
-        if s:
-            # strip the last ' + ' sign.
-            return s[:-3]
-        else:
-            return '0'
+        return str(self._to_poly())
 
-    def __add__(self,other):
-        return MultiVect( self.monomials + other.monomials ).order()
+    def __repr__(self):
+        return repr(self._to_poly())
+
+    def __add__(self, other):
+        P = deepcopy(self._P)
+        for v, c in other._P.items():
+            P[v] += c
+        return Mv(self.gens, P)
+
+    def __sub__(self, other):
+        return (self + (-1) * other)
+
+    def __rmul__(self, symb):
+        P = deepcopy(self._P)
+        for v in P:
+            P[v] *= symb
+        return Mv(self.gens, P)
     
-    def __sub__(self,other):
-        return (self + (-1)*other).order()
+    def __mul__(self, other):
+        P = defaultdict(int)
+        for v1, c1 in other._P.items():
+            for v2, c2 in self._P.items():
+                P[v1 + v2] += (c1 * c2)
+        return Mv(self.gens, P)
 
-    def __mul__(self,other):
-        mulVect = list()
-        for mon1 in self.monomials:
-            for mon2 in other.monomials:
-                mulVect.append( mon1*mon2 )
-        return MultiVect(mulVect).order()
-    
-    def __rmul__(self,other):
-        """Multiplication of a multivector and a functions."""
-        rmulVect = list()
-        for mon in self.monomials:
-            rmulVect.append(_MultiVectMonomial(other)*mon)
-        return MultiVect(rmulVect).order()
-
-    def sBr(self,other):
-        """ Schouten Bracket of self and other. """
-        return sBr(self,other)
-    
-    def degree(self):
-        """ decomposes a multivector into a list of unique degrees """
-        return sorted(set([ mon.degree() for mon in self.monomials ]))
-
-    def order(self):
-        """
-        Orders the anticommuting multivectors into ascending order 
-        and collects the summands. 
-        """
-        ordered = dict()
-        for mon in self.monomials:
-            sgn,sortedMonomial = _signedSort( mon.mvect )
-            # if the term isn't 0 either add it to sum, 
-            # or combine with a previous term.
-            if sgn != 0:
-                if sortedMonomial in ordered.keys():
-                    ordered[ sortedMonomial ] += sgn*mon.coeff
-                else:
-                    ordered[ sortedMonomial ] = sgn*mon.coeff
-        # Delete leading zeros:
-        try:
-            if ordered[()] == 0:
-                del ordered[()]
-        except KeyError:
-            pass
-        return MultiVect(ordered.items())
-
-#---------------------------------------------------------------------
-# multivector monomial class
-#---------------------------------------------------------------------
-
-class _MultiVectMonomial(object):
-    """
-    A class implementing monomial multivectors. Purely a helper class for 
-    defining the class MultiVector.  Monomials are represented as 
-    tuples (mvect,coeff)  where mvect is a tuple representing the anticommuting
-    part of the multvector.  e.g. x1*x3*dx1*dx4*d2 <----> ( (1,4,2), x1*x3 )
-    """
-    
-    def __init__(self,d=((),0) ):
-        try:
-            self.coeff = d[1]
-            self.mvect = d[0]
-        except:
-            self.coeff = d
-            self.mvect = ()
-
-    def __str__(self):
-        if self.mvect == ():
-            return str( self.coeff )
-        else:
-            if self.coeff == 0:
-                return ''
-            else:
-                d = '*'.join([ "dx%d" %i for i in self.mvect ])
-                return "(%s)*%s" %( str( self.coeff), d )
-
-    def __mul__(self,other):
-        """multiplication of multivectors. """
-        mulVect =  _MultiVectMonomial()
-        mulVect.mvect = self.mvect + other.mvect
-        mulVect.coeff = self.coeff * other.coeff
-        return mulVect.order()
-
-    def __rmul__(self,other):
-        """scalar multiplication """
-        scalVect =  _MultiVectMonomial()
-        scalVect.mvect = self.mvect
-        scalVect.coeff = self.coeff * other
-        return scalVect
-                                
-    def degree(self):
-        """ decomposes a multivector into a dict of degrees """
-        if self == ( (), 0 ):
-            return 'minus infinity'
-        else:
-            return len( self.mvect)
-
-    def diff(self,var,deg=0):
-        deriv = _MultiVectMonomial()
-        if deg == 0:
-            deriv.mvect = self.mvect
-            deriv.coeff = self.coeff.diff(var)
-        else:
-            try:
-                ind = self.mvect.index(var)
-            except ValueError:
-                return _MultiVectMonomial(0)
-            deriv.mvect = self.mvect[:ind] + self.mvect[ind+1:]
-            deriv.coeff = (-1)**(len(self.mvect)-ind)*self.coeff
-        return deriv
-
-    def order(self):
-        sgn,sortedMonomial = _signedSort( self.mvect )
-        if sgn != 0 and self.coeff != 0 :
-            ordered = _MultiVectMonomial()
-            ordered.mvect = sortedMonomial
-            ordered.coeff = sgn*self.coeff
-            return ordered
-        else:
-            return _MultiVectMonomial( 0 )
-
-#---------------------------------------------------------------------
-# Aux. Functions for MultiVector / MultiVectorMonomial classes
-#---------------------------------------------------------------------
-
-def _signedSort(L):
-    """
-    Returns a tuple (sgn,T) where T is a sorted version of L and
-    sgn is {-1,0,1}, the sign of the permutation taking L to T.
-    """
-
-    if len(L)<2:
-        return (1,tuple(L))
-    
-    L1,S = list(L[:]),sorted(L)
-    for k in range(len(S)-1):
-        if S[k] == S[k+1]:
-            return (0,tuple(S))
+    def brac(self, *F):
+        s = list(self.sdeg().keys())
+        if (len(s) != 1):
+            raise ValueError("brackets only allowable from homogeneous tensors")
+        if (s[0] != len(F)):
+            raise ValueError("not enough input functions")
         
-    sgn = 1
-    while L1:
-        k = L1.pop(0)
-        ind = S.index(k)
-        if ind % 2:
-            sgn *= -1
-        del S[ind]
-    return (sgn,tuple(sorted(L)))
+        mvs = [Mv(self.gens, {(): f}) for f in F]
+        A = sBr(self, mvs.pop())
+        while mvs:
+            A = sBr(A, mvs.pop())
 
-#---------------------------------------------------------------------
-# Schouten Bracket Functions
-#---------------------------------------------------------------------
+        return A._P[()]
+    
+    def deg(self):
+        '''decompose the multivector w/r/t the polynomial degree of the coefficients'''
+        degdict = defaultdict(lambda: defaultdict(int))
+        for v, c in self._P.items():
+            try:
+                monoms = zip(map(sum, c.as_poly().monoms()), c.as_coeff_add()[1])
+                for d, coeff in monoms:
+                    degdict[d][v] += coeff
+            except:
+                degdict[0][v] += c
 
-def sBr(X,Y):
-    """Schouten Bracket [X,Y]. """
-    V = MultiVect([])
-    for mon1 in X.monomials:
-        for mon2 in Y.monomials:
-            V = V + _sBrMonomials(mon1,mon2)
-    return V.order()
+        return {n: Mv(self.gens, P) for (n, P) in degdict.items()}
 
-def _sBrMonomials(mon1,mon2):
-    """ Schouten Bracket between two monomial multivectors. """
-    outVect = MultiVect([])
-    for k,var in enumerate(COORDS):
-        term1 = mon1.diff(k,deg=1)*mon2.diff(var)
-        term2 = mon2.diff(k,deg=1)*mon1.diff(var)
-        sgn = (-1)**( (mon1.degree() - 1)*(mon2.degree() - 1) + 1)
-        outVect +=  MultiVect( [ term1, sgn*term2 ] ).order()
-    return outVect
+    def diff(self, x):
+        '''differentiate the coefficients w/r/t x'''
+        P = defaultdict(int)
+        for v, c in self._P.items():
+            try:
+                P[v] = c.diff(x)
+            except AttributeError:
+                pass
+        return Mv(self.gens, P)
 
-#---------------------------------------------------------------------
-# Other functions
-#---------------------------------------------------------------------
+    def i(self, other):
+        '''contraction of multivector :self: by :other:'''
+        raise NotImplementedError
+    
+    def sBr(self, other):
+        return sBr(self, other)
+    
+    def sdeg(self):
+        '''decompose the multivector w/r/t the multivector degree'''
+        degdict = defaultdict(lambda: defaultdict(int))
+        for v, c in self._P.items():
+            degdict[len(v)][v] += c
+
+        return {n: Mv(self.gens, P) for (n, P) in degdict.items()}
+
+    def sdiff(self, x):
+        '''differentiate the vector basis w/r/t x'''
+        P = defaultdict(int)
+        for v, c in self._P.items():
+            try:
+                idx = v.index(x)
+                w = v[:idx] + v[idx + 1:]
+                P[w] = (-1)**(len(self.gens) - idx) * c
+            except ValueError:
+                pass
+        return Mv(self.gens, P)
+    
+    def sort(self):
+        return Mv(self.gens, sort(self.gens, self._P))
+    
+    def _to_poly(self):
+        s = 0
+        for (v, c) in self._P.items():
+            vec = map(lambda x: sympy.symbols('d%s' % x.__str__(), commutative=False), v)
+            s += c * reduce(mul, vec, 1)
+        return s
+
+
+def sBr(A, B):
+    '''take the schouten bracket of A and B'''
+    gens = tuple(set(A.gens) | set(B.gens))
+    out = Mv(gens)
+
+    for i, Ai in A.sdeg().items():
+        for j, Bj in B.sdeg().items():
+            for var in gens:
+                sgn = (-1)**((i - 1) * (j - 1) + 1)
+                out += (Ai.sdiff(var) * Bj.diff(var) + sgn * Bj.sdiff(var) * Ai.diff(var))
+
+    return out
+
+
+def sort(gens, P):
+    out = defaultdict(int)
+    for vals, coeff in P.items():
+        s, parity = _sort(vals, gens)
+        out[s] += parity * coeff
+    return out
+
+
+def _sort(values, gens):
+    '''
+    (c0,c3,c2), (c0, c1, c2, c3) => ((c0,c2,c3),-1)
+    '''
+    idxs = [gens.index(x) for x in values]
+
+    N = len(idxs)
+    num_swaps = 0
+    for i in range(N - 1):
+        for j in range(i + 1, N):
+            if idxs[i] == idxs[j]:
+                return values, 0
+            if idxs[i] > idxs[j]:
+                idxs[i], idxs[j] = idxs[j], idxs[i]
+                num_swaps += 1
+    return tuple(gens[i] for i in idxs), (-1)**(num_swaps % 2)
+        
+
+# ---------------------------------------------------------------------
+# misc
+# ---------------------------------------------------------------------
+
+class stdSympl(object):
+
+    def __init__(self, N):
+        self.dim = N
+        self.x = sympy.symbols(['x%s' % x for x in range(N)])
+        self.y = sympy.symbols(['y%s' % x for x in range(N)])
+        self.Mv = Mv(self.x + self.y, {(s, t): 1 for (s, t) in zip(self.x, self.y)})
+        
+    def brac(self, f, g):
+        return self.Mv.brac(f, g)
+
+
+# ---------------------------------------------------------------------
+# lifting coords
+# ---------------------------------------------------------------------
+
+    
+def lift(expr, gb, invHom, limit=10):
+    '''
+    returns a lifted expression, where expr is
+    rewritten using the symbols in embRing.
+    '''
+    if not limit:
+        print("limit reached before completion")
+        return expr
+    
+    p = gb.reduce(expr)
+    inverse = {x: y for (y, x) in invHom.items()}
+    embRing = [inverse[x.as_expr()] for x in gb.args[0]]
+    
+    subbed = sum(x * y for (x, y) in zip(p[0], embRing)) + p[1]
+
+    if p[1]:
+        raise
+    orig_gens_left = subbed.atoms() & (set(gb.gens) - set(embRing))
+
+    if not len(orig_gens_left):
+        return subbed
+    else:
+        inv = list(map(lambda x: x.as_expr(), gb.args[0]))
+        gens = set(gb.gens) | set(embRing)
+        gb = sympy.polys.groebner(inv, *gens)
+        return lift(subbed, gb, invHom, limit=limit - 1)
+
+    
+def lift_from_quotient(invHom):
+
+    gb = sympy.polys.groebner(invHom.values())
+    embRing = invHom.keys()
+
+    brac = stdSympl(len(embRing)).brac
+    
+    P = {}
+    for k1, i1 in enumerate(embRing):
+        for k2, i2 in enumerate(embRing):
+            if k1 < k2:
+                p = brac(invHom[i1], invHom[i2])
+                P[(i1, i2)] = lift(p.as_expr(), gb, invHom)
+    return P
+
+'''
+def poissBr(P):
+    Pfull = deepcopy(P)
+    Pfull.update({(k2, k1): -1 * v for ((k1, k2), v) in P.items()})
+
+    def bracket(f, g):
+        return sum(
+            f.diff(xi) * g.diff(yj) * Pfull[(xi, yj)] for (xi, yj) in Pfull.keys()
+        )
+
+    return bracket
+'''
