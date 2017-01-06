@@ -55,12 +55,21 @@ class Mv(object):
 
         return A._P[()]
 
-    def deg(self):
+    def deg(self, gens=None):
         '''decompose the multivector w/r/t the polynomial degree of the coefficients'''
+        if gens is None:
+            gens = self.gens
         degdict = defaultdict(lambda: defaultdict(int))
         for v, c in self._P.items():
             try:
-                monoms = zip(map(sum, c.as_poly().monoms()), c.as_coeff_add()[1])
+                monoms = []
+                for (x, y) in c.as_poly(gens).as_dict().items():
+                    out = y
+                    for (x1, y1) in zip(x, c.as_poly(gens).gens):
+                        if x1 > 0:
+                            out *= y1**x1
+                    monoms.append((sum(x), out))
+
                 for d, coeff in monoms:
                     degdict[d][v] += coeff
             except:
