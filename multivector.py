@@ -11,7 +11,7 @@ class Mv(object):
 
     def __init__(self, gens, P=defaultdict(int)):
         self.gens = gens
-        self._P = P
+        self._P = defaultdict(int, P)
 
     def __str__(self):
         return str(self._to_poly())
@@ -41,6 +41,7 @@ class Mv(object):
                 P[v1 + v2] += (c1 * c2)
         return Mv(self.gens, P)
 
+    '''
     def brac(self, *F):
         s = list(self.sdeg().keys())
         if (len(s) != 1):
@@ -54,6 +55,7 @@ class Mv(object):
             A = sBr(A, mvs.pop())
 
         return A._P[()]
+    '''
 
     def deg(self, gens=None):
         '''decompose the multivector w/r/t the polynomial degree of the coefficients'''
@@ -116,15 +118,20 @@ class Mv(object):
     
     def sort(self):
         return Mv(self.gens, sort(self.gens, self._P))
-    
+
     def _to_poly(self):
+        '''
+        printing utility function
+        '''
         s = 0
         for (v, c) in self._P.items():
-            vec = map(lambda x: sympy.symbols('d%s' % x.__str__(), commutative=False), v)
+            vec = map(
+                lambda x: sympy.symbols('d%s' % x.__str__(), commutative=False),
+                v)
             s += c * reduce(mul, vec, 1)
         return s
 
-
+    
 def sBr(A, B):
     '''take the schouten bracket of A and B'''
     gens = tuple(set(A.gens) | set(B.gens))
@@ -134,7 +141,8 @@ def sBr(A, B):
         for j, Bj in B.sdeg().items():
             for var in gens:
                 sgn = (-1)**((i - 1) * (j - 1) + 1)
-                out += (Ai.sdiff(var) * Bj.diff(var) + sgn * Bj.sdiff(var) * Ai.diff(var))
+                out += (Ai.sdiff(var) * Bj.diff(var) +
+                        sgn * Bj.sdiff(var) * Ai.diff(var))
 
     return out
 
@@ -163,81 +171,6 @@ def _sort(values, gens):
                 idxs[i], idxs[j] = idxs[j], idxs[i]
                 num_swaps += 1
     return tuple(gens[i] for i in idxs), (-1)**(num_swaps % 2)
-        
-
-# ---------------------------------------------------------------------
-# misc
-# ---------------------------------------------------------------------
-
-class stdSympl(object):
-
-    def __init__(self, N):
-        self.dim = N
-        self.x = sympy.symbols(['x%s' % x for x in range(N)])
-        self.y = sympy.symbols(['y%s' % x for x in range(N)])
-        self.Mv = Mv(self.x + self.y, {(s, t): 1 for (s, t) in zip(self.x, self.y)})
-        
-    def brac(self, f, g):
-        return self.Mv.brac(f, g)
 
 
-# ---------------------------------------------------------------------
-# lifting coords
-# ---------------------------------------------------------------------
 
-    
-def lift(expr, gb, invHom, limit=10):
-    '''
-    returns a lifted expression, where expr is
-    rewritten using the symbols in embRing.
-    '''
-    if not limit:
-        print("limit reached before completion")
-        return expr
-    
-    p = gb.reduce(expr)
-    inverse = {x: y for (y, x) in invHom.items()}
-    embRing = [inverse[x.as_expr()] for x in gb.args[0]]
-    
-    subbed = sum(x * y for (x, y) in zip(p[0], embRing)) + p[1]
-
-    if p[1]:
-        raise
-    orig_gens_left = subbed.atoms() & (set(gb.gens) - set(embRing))
-
-    if not len(orig_gens_left):
-        return subbed
-    else:
-        inv = list(map(lambda x: x.as_expr(), gb.args[0]))
-        gens = set(gb.gens) | set(embRing)
-        gb = sympy.polys.groebner(inv, *gens)
-        return lift(subbed, gb, invHom, limit=limit - 1)
-
-    
-def lift_from_quotient(invHom):
-
-    gb = sympy.polys.groebner(invHom.values())
-    embRing = invHom.keys()
-
-    brac = stdSympl(len(embRing)).brac
-    
-    P = {}
-    for k1, i1 in enumerate(embRing):
-        for k2, i2 in enumerate(embRing):
-            if k1 < k2:
-                p = brac(invHom[i1], invHom[i2])
-                P[(i1, i2)] = lift(p.as_expr(), gb, invHom)
-    return P
-
-'''
-def poissBr(P):
-    Pfull = deepcopy(P)
-    Pfull.update({(k2, k1): -1 * v for ((k1, k2), v) in P.items()})
-
-    def bracket(f, g):
-        return sum(
-            f.diff(xi) * g.diff(yj) * Pfull[(xi, yj)] for (xi, yj) in Pfull.keys()
-        )
-
-    return bracket
-'''
