@@ -41,7 +41,6 @@ class Mv(object):
                 P[v1 + v2] += (c1 * c2)
         return Mv(self.gens, P)
 
-    '''
     def brac(self, *F):
         s = list(self.sdeg().keys())
         if (len(s) != 1):
@@ -55,7 +54,6 @@ class Mv(object):
             A = sBr(A, mvs.pop())
 
         return A._P[()]
-    '''
 
     def deg(self, gens=None):
         '''decompose the multivector w/r/t the polynomial degree of the coefficients'''
@@ -88,10 +86,6 @@ class Mv(object):
             except AttributeError:
                 pass
         return Mv(self.gens, P)
-
-    def i(self, other):
-        '''contraction of multivector :self: by :other:'''
-        raise NotImplementedError
     
     def sBr(self, other):
         return sBr(self, other)

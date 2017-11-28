@@ -46,15 +46,3 @@ def lift_from_quotient(invHom):
                 P[(i1, i2)] = lift(p.as_expr(), gb, invHom)
     return P
 
-'''
-def poissBr(P):
-    Pfull = deepcopy(P)
-    Pfull.update({(k2, k1): -1 * v for ((k1, k2), v) in P.items()})
-
-    def bracket(f, g):
-        return sum(
-            f.diff(xi) * g.diff(yj) * Pfull[(xi, yj)] for (xi, yj) in Pfull.keys()
-        )
-
-    return bracket
-'''
