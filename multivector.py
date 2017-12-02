@@ -9,9 +9,19 @@ from operator import mul
 
 class Mv(object):
 
-    def __init__(self, gens, P=defaultdict(int)):
+    def __init__(self, gens, P=None):
+        if P is None:
+            P = defaultdict(sympy.numbers.Zero)
+        else:
+            P = sort(gens, P)
+            for x, y in P.items():
+                if isinstance(y, int):
+                    P[x] = sympy.numbers.Number(y)
+                    
+            P = defaultdict(sympy.numbers.Zero, P)
+            
         self.gens = gens
-        self._P = defaultdict(int, P)
+        self._P = P
 
     def __str__(self):
         return str(self._to_poly())
@@ -49,12 +59,18 @@ class Mv(object):
             raise ValueError("not enough input functions")
         
         mvs = [Mv(self.gens, {(): f}) for f in F]
-        A = sBr(self, mvs.pop())
+        A = sBr(mvs.pop(), self)
         while mvs:
-            A = sBr(A, mvs.pop())
+            A = sBr(mvs.pop(), A)
 
         return A._P[()]
 
+    def mapCoeffs(self, f):
+        P = deepcopy(self._P)
+        for k in P:
+            P[k] = f(P[k])
+        return Mv(self.gens, P)
+    
     def deg(self, gens=None):
         '''decompose the multivector w/r/t the polynomial degree of the coefficients'''
         if gens is None:
