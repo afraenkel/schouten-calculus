@@ -13,6 +13,7 @@ def lift(rmap, domain, codomain):
         rmap.values(),
         *(tuple(domain) + tuple(codomain))
     )
+
     coordlist = [inv_rmap[x] for x in gb.exprs]
     
     def closure(expr, limit=10):
