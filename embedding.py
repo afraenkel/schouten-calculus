@@ -9,8 +9,9 @@ def lift(rmap, domain, codomain):
     '''
 
     inv_rmap = {y: x for (x, y) in rmap.items()}
+    vals = [x for x in rmap.values() if x != 0]
     gb = sympy.polys.groebner(
-        rmap.values(),
+        vals,
         *(tuple(domain) + tuple(codomain))
     )
 
@@ -23,9 +24,7 @@ def lift(rmap, domain, codomain):
 
         b, r = gb.reduce(expr)
 
-        if r != 0:
-            print("groebner reduction has non-zero remainder")
-            print(b, r)
+        if r != 0 and (sum(b) == 0):
             return r
 
         subbed = sum(x * y for (x, y) in zip(b, coordlist))
